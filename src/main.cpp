@@ -3,11 +3,21 @@
 #include <LiquidCrystal_I2C.h>
 #include "StringSplitter.h"
 
+const int changeModeButtonPin = D5;
+const int SCREEN_MODE_DEFAULT = 0; // SHOW ALL
+const int SCREEN_MODE_CPU = 1; // SHOW cpu only
+const int SCREEN_MODE_MEM = 2; // show mem only
+
 int incomingByte = 0;
+
 int realCores = 0;
 int totalThreads = 0;
+int readingTimeOut = 100;
+bool isPrevReadingReceiveData = false;
 
 String currCPULoadPercent = "";
+String cpuTempArray[20];
+int cpuTempArraySize = 0;  
 
 String currMemTotal = "";
 String currMemUsed = "";
@@ -16,10 +26,6 @@ String currMemLoadPercent = "";
 
 String currTime = "";
 String currDay = "";
-
-int SCREEN_MODE_DEFAULT = 0; // SHOW ALL
-int SCREEN_MODE_CPU = 1; // SHOW cpu only
-int SCREEN_MODE_MEM = 2; // show mem only
 
 LiquidCrystal_I2C lcd(0x3F,20,4);
 
@@ -31,6 +37,8 @@ void showStartupMessage(){
 
 void setup() {
   Serial.begin(115200);
+
+  pinMode(changeModeButtonPin, INPUT);    
 
   lcd.init();                      // initialize the lcd 
   lcd.backlight();
@@ -57,22 +65,26 @@ String getValue(String data, char separator, int index)
 void parseReadings(String s){  
   if(s.startsWith("cpu_stat")){
     int cpuEndIndx = s.indexOf("cpu_stat_end");
-    String cpuInfo = s.substring(strlen("cpu_stat_end"), cpuEndIndx);
-  
-    StringSplitter *cpuSplitter = new StringSplitter(cpuInfo, ',', 200);
-    int cpuItemCount = cpuSplitter->getItemCount();    
+    String cpuInfo = s.substring(strlen("cpu_stat"), cpuEndIndx);    
 
-    for(int i = 0; i < cpuItemCount; i++){
-      String item = cpuSplitter->getItemAtIndex(i);
-      // Serial.println("Item #" + String(i) + ": " + item);
-      if(i == cpuItemCount - 1){
-        currCPULoadPercent = item;
+    int cpuTempArraySize = 0;  
+    int occurencesIndexes[20];
+    for(int x = 0; x < cpuInfo.length(); x++){
+      if(cpuInfo[x] == ','){
+          occurencesIndexes[cpuTempArraySize] = x;
+          cpuTempArraySize++;
       }
     }
-    // Serial.println("Cpu load: " + currCPULoadPercent);
+  
+    if(cpuTempArraySize > 0){    
+      cpuTempArray[0] = cpuInfo.substring(0, occurencesIndexes[0]);      
+
+      for(int i=0, j = 1; i < cpuTempArraySize - 1 ; i++, j++){
+        cpuTempArray[j] = cpuInfo.substring(occurencesIndexes[i] + 1, occurencesIndexes[i+1]);        
+      }       
+    } 
 
     currCPULoadPercent = cpuInfo.substring(cpuInfo.lastIndexOf(",") + 1);
-    // Serial.println("Cpu load: " + currCPULoadPercent);
 
     int memIndx = s.indexOf("mem_stat");
     int memEndIndx = s.indexOf("mem_stat_end");
@@ -130,6 +142,33 @@ void printScreenDefault(){
   lcd.print(currDay);
 }
 
+void drawInfo(String val, int xPos, int yPos){
+  
+}
+
+void printCPUScreen(){
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("CPU:");
+  lcd.setCursor(4,0);  
+  lcd.print(currCPULoadPercent);  
+
+  int arrayLength = sizeof(cpuTempArray)/sizeof(cpuTempArray[0]);
+
+  for(int i=0, xPos=0, yPos=1; i < arrayLength; i++){    
+    if(i > 21) return;
+
+    if(xPos > 18){
+      xPos = 0; yPos+= 1;
+    }
+
+    lcd.setCursor(xPos, yPos);
+    lcd.print(cpuTempArray[i]);
+
+    xPos = xPos + 3;
+  }
+}
+
 void parseButton(){
 
 }
@@ -138,10 +177,18 @@ void loop(){
   if (Serial.available() > 0) {    
     String s = Serial.readString();  
     parseReadings(s);
-    printScreenDefault();
+    // printScreenDefault();
+    printCPUScreen();
     Serial.println(s);
+    // isPrevReadingReceiveData = true;
   }else{
-    showStartupMessage();
-    delay(1000);
+    int reading = digitalRead(changeModeButtonPin);
+    Serial.print(reading);
+
+    // if(isPrevReadingReceiveData){
+      // showStartupMessage();
+      // isPrevReadingReceiveData = false; 
+    // }
+    delay(readingTimeOut);
   }
 }
