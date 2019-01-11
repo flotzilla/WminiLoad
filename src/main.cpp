@@ -7,25 +7,38 @@ const int changeModeButtonPin = D5;
 const int SCREEN_MODE_DEFAULT = 0; // SHOW ALL
 const int SCREEN_MODE_CPU = 1; // SHOW cpu only
 const int SCREEN_MODE_MEM = 2; // show mem only
+const int READING_TIMEOUT = 100;
 
-int incomingByte = 0;
-
-int realCores = 0;
-int totalThreads = 0;
-int readingTimeOut = 100;
 bool isPrevReadingReceiveData = false;
 
-String currCPULoadPercent = "";
-String cpuTempArray[20];
-int cpuTempArraySize = 0;  
+int cpuTempArraySize = 0,
+    cpuCount = 0,
+    cpuReal = 0,
+    vaCount = 0;
 
-String currMemTotal = "";
-String currMemUsed = "";
-String currMemFree = "";
-String currMemLoadPercent = "";
 
-String currTime = "";
-String currDay = "";
+String cpuTempArray[20],         
+        currCPULoadPercent = "",      
+        currMemTotal = "",
+        currMemUsed = "",
+        currMemFree = "",
+        currMemLoadPercent = "",
+        
+        currTime = "",
+        currDay = "";
+
+struct VideoCard{
+  int id;
+  String name;
+  String engClock;
+  String memClock;
+  String currTemp;
+  String usage;
+  String fanPercent;
+  String fanRpm;  
+};
+
+VideoCard videocards[10];
 
 LiquidCrystal_I2C lcd(0x3F,20,4);
 
@@ -36,34 +49,25 @@ void showStartupMessage(){
 }
 
 void setup() {
+  pinMode(changeModeButtonPin, INPUT);    
+  
   Serial.begin(115200);
 
-  pinMode(changeModeButtonPin, INPUT);    
-
-  lcd.init();                      // initialize the lcd 
+  lcd.init();
   lcd.backlight();
+
   showStartupMessage();
 }
 
-String getValue(String data, char separator, int index)
-{
-  int found = 0;
-  int strIndex[] = {0, -1};
-  int maxIndex = data.length()-1;
-
-  for(int i=0; i<=maxIndex && found<=index; i++){
-    if(data.charAt(i)==separator || i==maxIndex){
-        found++;
-        strIndex[0] = strIndex[1]+1;
-        strIndex[1] = (i == maxIndex) ? i+1 : i;
-    }
-  }
-
-  return found>index ? data.substring(strIndex[0], strIndex[1]) : "";
+String getReading(String from, String tagStart){
+  int startIndx = from.indexOf(tagStart);
+  int endIndx = from.indexOf(tagStart + "_end");
+  return from.substring(startIndx + tagStart.length(), endIndx);
 }
 
 void parseReadings(String s){  
-  if(s.startsWith("cpu_stat")){
+  if(s.startsWith("cpu_stat")){  
+    // cpu stats parsing
     int cpuEndIndx = s.indexOf("cpu_stat_end");
     String cpuInfo = s.substring(strlen("cpu_stat"), cpuEndIndx);    
 
@@ -86,9 +90,8 @@ void parseReadings(String s){
 
     currCPULoadPercent = cpuInfo.substring(cpuInfo.lastIndexOf(",") + 1);
 
-    int memIndx = s.indexOf("mem_stat");
-    int memEndIndx = s.indexOf("mem_stat_end");
-    String memInfo = s.substring(memIndx + strlen("mem_stat"), memEndIndx);
+    // memory parsing
+    String memInfo = getReading(s, "mem_stat");
     StringSplitter *splitter = new StringSplitter(memInfo, ',', 4);
 
     if(splitter->getItemCount() == 4){
@@ -98,13 +101,31 @@ void parseReadings(String s){
       currMemLoadPercent = splitter->getItemAtIndex(3);  
     }
 
-    int timeIndx = s.indexOf("current_time");
-    int timeEndIndx = s.indexOf("current_time_end");
-    currTime = s.substring(timeIndx + strlen("current_time"), timeEndIndx);
+        // cpu stats parsing
+    cpuCount = getReading(s, "cpu_count").toInt();
+    cpuReal = getReading(s, "cpu_real").toInt();
+    vaCount = getReading(s, "va_count").toInt();
+    currTime = getReading(s, "current_time"); 
+    currDay = getReading(s, "curr_day");    
 
-    int dayIndx = s.indexOf("curr_day");
-    int dayEndIndx = s.indexOf("curr_day_end");
-    currDay = s.substring(dayIndx + strlen("curr_day"), dayEndIndx);  
+    // parsing gpu settings
+    currTime = getReading(s, "current_time"); 
+    if(vaCount > 0){      
+      for( int i = 0; i < vaCount; i ++){
+        VideoCard card;
+        String vaParams = getReading(s, "va" + i);
+        
+        card.id = i;                
+        card.name = getReading(vaParams, "card");
+        card.engClock = getReading(vaParams, "eng_clock");
+        card.memClock = getReading(vaParams, "mem_clock");
+        card.currTemp = getReading(vaParams, "currtemp");
+        card.usage = getReading(vaParams, "usage");
+        card.fanPercent = getReading(vaParams, "fs_percent");
+        card.fanRpm = getReading(vaParams, "fs_rpm");
+        videocards[i] = card;
+      }          
+    }
   }
 }
 
@@ -153,6 +174,11 @@ void printCPUScreen(){
   lcd.setCursor(4,0);  
   lcd.print(currCPULoadPercent);  
 
+  lcd.setCursor(11,0);
+  lcd.print("Mem:");
+  lcd.setCursor(15,0);
+  lcd.print(currMemLoadPercent);
+
   int arrayLength = sizeof(cpuTempArray)/sizeof(cpuTempArray[0]);
 
   for(int i=0, xPos=0, yPos=1; i < arrayLength; i++){    
@@ -169,6 +195,51 @@ void printCPUScreen(){
   }
 }
 
+void showVideoCardLogo(VideoCard *card){
+  lcd.clear();
+  lcd.setCursor(0,1);
+  lcd.print(card->name.substring(0, 19));
+}
+
+void printGpuScreen(VideoCard *card){
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("F:");
+  lcd.setCursor(2,0);
+  lcd.print(card->fanPercent);
+  lcd.setCursor(7,0);
+  lcd.print(card->fanRpm);
+  
+  lcd.setCursor(0,1);
+  lcd.print("E:");
+  lcd.setCursor(2,1);
+  lcd.print(card->engClock);
+  lcd.setCursor(15,1);
+  lcd.print("T");
+  lcd.setCursor(16,1);
+  lcd.print(card->currTemp);
+
+  lcd.setCursor(0,2);
+  lcd.print("M:");
+  lcd.setCursor(2,2);
+  lcd.print(card->memClock);
+  lcd.setCursor(15,2);
+  lcd.print("U");
+  lcd.setCursor(16,2);
+  lcd.print(card->usage);
+
+  lcd.setCursor(0,3);
+  lcd.print("C:");
+  lcd.setCursor(2,3);
+  lcd.print(currCPULoadPercent);
+  lcd.setCursor(9,3);
+  lcd.print("M:");
+  lcd.setCursor(11,3);
+  lcd.print(currMemLoadPercent);
+  lcd.setCursor(18,3);
+  lcd.print(String(card->id + 1));
+}
+
 void parseButton(){
 
 }
@@ -178,17 +249,18 @@ void loop(){
     String s = Serial.readString();  
     parseReadings(s);
     // printScreenDefault();
-    printCPUScreen();
+    // printCPUScreen();
+    printGpuScreen(&videocards[0]);
     Serial.println(s);
     // isPrevReadingReceiveData = true;
+    delay(READING_TIMEOUT);
   }else{
-    int reading = digitalRead(changeModeButtonPin);
-    Serial.print(reading);
+    // int reading = digitalRead(changeModeButtonPin);
+    // Serial.print(reading);
 
     // if(isPrevReadingReceiveData){
       // showStartupMessage();
       // isPrevReadingReceiveData = false; 
     // }
-    delay(readingTimeOut);
   }
 }
