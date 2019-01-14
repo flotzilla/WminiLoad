@@ -16,6 +16,7 @@ const int READING_TIMEOUT = 100;
 // Duration of logo showing
 // time = READING_TIMEOUT * VA_DISPLAY_TIMES_SHOW
 const int VA_DISPLAY_TIMES_SHOW = 2;
+const int BAD_READINGS_THRESHOLD = 200;
 
 static struct pt serialReedHandlePt, buttonHanldePt, lcdHanldePt;
 
@@ -30,11 +31,13 @@ int cpuTempArraySize = 0,
     lastButtonState = LOW,
 
     currentScreen = SCREEN_MODE_INIT,
+    prevActiveScreen = SCREEN_MODE_INIT, 
     currentVaScreen = 0,
     currentVaDispolayScreenShowed = 0;
 
 unsigned long lastDebounceTime = 0,
-              debounceDelay = 50;
+              debounceDelay = 50,
+              notReadingSerialCount = 0;
 
 String cpuTempArray[20],
     currCPULoadPercent = "",
@@ -334,7 +337,7 @@ static int readSerial(struct pt *pt, int interval)
     PT_WAIT_UNTIL(pt, millis() - timestamp > interval );
     timestamp = millis();
 
-    if (Serial.available() > 0) {
+    if (Serial.available() > 0) {      
       String s = Serial.readString();
       parseReadings(s);
       Serial.println(s);
@@ -343,6 +346,13 @@ static int readSerial(struct pt *pt, int interval)
       if(currentScreen == SCREEN_MODE_INIT){
         currentScreen++;
       }
+
+      notReadingSerialCount = 0;
+    }else{
+        notReadingSerialCount++;
+        if(notReadingSerialCount > BAD_READINGS_THRESHOLD){
+          currentScreen = SCREEN_MODE_INIT;
+        }
     }
   }
   PT_END(pt);
