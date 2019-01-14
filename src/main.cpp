@@ -26,6 +26,7 @@ int cpuTempArraySize = 0,
     cpuCount = 0,
     cpuReal = 0,
     vaCount = 0,
+    primVaCard = -1,
 
     buttonState,
     lastButtonState = LOW,
@@ -47,7 +48,8 @@ String cpuTempArray[20],
     currMemLoadPercent = "",
 
     currTime = "",
-    currDay = "";
+    currDay = "",
+    uptime = "";
 
 struct VideoCard
 {
@@ -139,8 +141,10 @@ void parseReadings(String s)
     currTime = getReading(s, "current_time");
     currDay = getReading(s, "curr_day");
 
-    // parsing gpu settings
     currTime = getReading(s, "current_time");
+    uptime = getReading(s, "uptime");  
+
+    // parsing gpu settings
     if (vaCount > 0) {
       for (int i = 0; i < vaCount; i++) {
         VideoCard card;
@@ -156,6 +160,11 @@ void parseReadings(String s)
         card.fanRpm = getReading(vaParams, "fs_rpm");
         videocards[i] = card;
       }
+
+      int primGpu = getReading(s, "prim_gpu").toInt();
+      if(primGpu != -1){
+        primVaCard = primGpu;
+      }
     }
   }
 }
@@ -165,38 +174,61 @@ void printScreenDefault()
   lcd.setCursor(0, 0);
   lcd.print("CPU:");
   lcd.setCursor(4, 0);
-  lcd.print(currCPULoadPercent);
-  if (currCPULoadPercent.length() == 5) {
-    lcd.setCursor(9, 0);
-    lcd.print("  ");
-  }
-  if (currCPULoadPercent.length() == 4) {
-    lcd.setCursor(8, 0);
-    lcd.print("   ");
-  }
-
-  lcd.setCursor(11, 0);
-  lcd.print("Mem:");
-  lcd.setCursor(15, 0);
-  lcd.print(currMemLoadPercent);
+  lcd.print(currCPULoadPercent);  
 
   lcd.setCursor(0, 1);
-  lcd.print(currMemUsed);
-  if (currMemUsed.length() == 6){
-    lcd.setCursor(6, 1);
-    lcd.print(" ");
-  }
-  lcd.setCursor(7, 1);
-  lcd.print("/");
-  lcd.setCursor(8, 1);
-  lcd.print(currMemTotal);
-  lcd.setCursor(15, 1);
-  lcd.print("     ");
+  lcd.print("M:");
+  // clean up cell
+  lcd.setCursor(5, 1);
+  lcd.print("  ");
 
-  lcd.setCursor(0, 2);
-  lcd.print(currTime);
-  lcd.setCursor(17, 2);
-  lcd.print(currDay);
+  lcd.setCursor(2, 1);
+  lcd.print(currMemLoadPercent);
+
+  // clean up cell
+  lcd.setCursor(10, 1);
+  lcd.print("  ");
+  lcd.setCursor(7, 1);
+  lcd.print(currMemUsed);
+
+  lcd.setCursor(11, 1);
+  lcd.print("/");
+  // clean up cell
+  lcd.setCursor(18, 1);
+  lcd.print("  ");
+  lcd.setCursor(12, 1);
+  lcd.print(currMemTotal);
+
+  if (primVaCard != -1){
+    VideoCard *card = &videocards[primVaCard];
+    lcd.setCursor(0, 2);    
+    lcd.print("F:");
+    lcd.setCursor(2, 2);
+    lcd.print(card->fanPercent);
+
+    lcd.setCursor(7, 2);
+    lcd.print("T:");
+    lcd.setCursor(9, 2);
+    lcd.print(card->currTemp);
+
+    lcd.setCursor(14, 2);
+    lcd.print("U:");
+    lcd.setCursor(16, 2);
+    lcd.print(card->usage);
+
+    lcd.setCursor(0, 3);
+    lcd.print(currTime);
+    lcd.setCursor(17, 3);
+    lcd.print(currDay);
+  } else {
+    lcd.setCursor(0, 2);
+    lcd.print(currTime);
+    lcd.setCursor(17, 2);
+    lcd.print(currDay);
+
+    lcd.setCursor(0, 3);
+    lcd.print(uptime);    
+  }
 }
 
 void printCPUScreen()
@@ -233,7 +265,7 @@ void showVideoCardLogo(VideoCard *card)
 {
   lcd.clear();
   lcd.setCursor(0, 1);
-  lcd.print(card->name.substring(0, 19));
+  lcd.print(card->name.substring(0, 20));
 }
 
 void printGpuScreen(VideoCard *card)
