@@ -14,7 +14,7 @@ and show it on LCD 16x4 screen
 Requirements
 ------------
 * arduino / esp8266 / wemos board
-* LCD 1604 screen with i2c module
+* LCD 2004 screen with i2c module
 * push button 
 * 10kOm resiztor
 * *optional* 10kOm variable resistor
