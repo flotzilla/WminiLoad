@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include "StringSplitter.h"
+#include <pt.h>
 
 const int changeModeButtonPin = D5;
 const int SCREEN_MODE_DEFAULT = 0;    // SHOW ALL
@@ -14,6 +15,8 @@ const int READING_TIMEOUT = 100;
 // Duration of logo showing
 // time = READING_TIMEOUT * VA_DISPLAY_TIMES_SHOW
 const int VA_DISPLAY_TIMES_SHOW = 10;
+
+static struct pt serialReedHandlePt, buttonHanldePt, lcdHanldePt;
 
 bool isPrevReadingReceiveData = false;
 
@@ -73,6 +76,10 @@ void setup()
 
   lcd.init();
   lcd.backlight();
+
+  PT_INIT(&serialReedHandlePt);
+  PT_INIT(&buttonHanldePt);
+  PT_INIT(&lcdHanldePt);
 
   showStartupMessage();
 }
@@ -283,74 +290,98 @@ void parseButton()
   }
 }
 
-void readButton()
+static int readButton(struct pt *pt, int interval)
 {
-  int reading = digitalRead(changeModeButtonPin);
-  if (reading != lastButtonState) {
-    lastDebounceTime = millis();
-  }
+  static unsigned long timestamp = 0;
+  PT_BEGIN(pt);
 
-  if ((millis() - lastDebounceTime) > debounceDelay) {
-    if (reading != buttonState) {
-      buttonState = reading;
+  while(1) {
+    PT_WAIT_UNTIL(pt, millis() - timestamp > interval );
+    timestamp = millis();
 
-      if (buttonState == HIGH){
-        parseButton();
+    int reading = digitalRead(changeModeButtonPin);
+    if (reading != lastButtonState) {
+      lastDebounceTime = millis();
+    }
+
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+      if (reading != buttonState) {
+        buttonState = reading;
+
+        if (buttonState == HIGH){
+          parseButton();
+        }
       }
     }
-  }
 
-  lastButtonState = reading;
+    lastButtonState = reading;
+  }
+  PT_END(pt);
 }
 
-void readSerial()
+static int readSerial(struct pt *pt, int interval)
 {
-  if (Serial.available() > 0) {
-    String s = Serial.readString();
-    parseReadings(s);
-    Serial.println(s);
-    delay(READING_TIMEOUT);
-  }else{
-    // showStartupMessage();
-  }
-}
+  static unsigned long timestamp = 0;
+  PT_BEGIN(pt);
+  while(1) {
+    PT_WAIT_UNTIL(pt, millis() - timestamp > interval );
+    timestamp = millis();
 
-void showScreen()
-{
-  switch (currentScreen) {
-
-  case SCREEN_MODE_DEFAULT:
-    printScreenDefault();
-    break;
-
-  case SCREEN_MODE_CPU:
-    printCPUScreen();
-    break;
-
-  case SCREEN_MODE_MEM:
-    printScreenDefault();
-    break;
-
-  case SCREEN_MODE_VA_DISPLAY:
-    if (currentVaDispolayScreenShowed > VA_DISPLAY_TIMES_SHOW) {
-      currentScreen = SCREEN_MODE_VA;
-      currentVaDispolayScreenShowed = 0;
-      break;
-    } else {
-      showVideoCardLogo(&videocards[currentVaScreen]);
-      currentVaDispolayScreenShowed++;
-      break;
+    if (Serial.available() > 0) {
+      String s = Serial.readString();
+      parseReadings(s);
+      Serial.println(s);
+      delay(READING_TIMEOUT);
     }
 
-  case SCREEN_MODE_VA:
-    printGpuScreen(&videocards[currentVaScreen]);
-    break;
   }
+  PT_END(pt);
+}
+
+static int showScreen(struct pt *pt, int interval)
+{
+  static unsigned long timestamp = 0;
+  PT_BEGIN(pt);
+  while(1) {
+    PT_WAIT_UNTIL(pt, millis() - timestamp > interval );
+    timestamp = millis();
+
+    switch (currentScreen) {    
+      case SCREEN_MODE_DEFAULT:
+        printScreenDefault();
+        break;
+
+      case SCREEN_MODE_CPU:
+        printCPUScreen();
+        break;
+
+      case SCREEN_MODE_MEM:
+        printScreenDefault();
+        break;
+
+      case SCREEN_MODE_VA_DISPLAY:
+        if (currentVaDispolayScreenShowed > VA_DISPLAY_TIMES_SHOW) {
+          currentScreen = SCREEN_MODE_VA;
+          currentVaDispolayScreenShowed = 0;
+          break;
+        } else {
+          showVideoCardLogo(&videocards[currentVaScreen]);
+          currentVaDispolayScreenShowed++;
+          break;
+        }
+
+      case SCREEN_MODE_VA:
+        printGpuScreen(&videocards[currentVaScreen]);
+        break;
+    }
+
+  }
+  PT_END(pt);
 }
 
 void loop()
 {
-  readSerial();
-  readButton();
-  showScreen();
+  readSerial(&serialReedHandlePt, 10);
+  readButton(&buttonHanldePt, 10);
+  showScreen(&lcdHanldePt, 1000);
 }
