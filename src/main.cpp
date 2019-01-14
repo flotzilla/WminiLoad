@@ -5,6 +5,7 @@
 #include <pt.h>
 
 const int changeModeButtonPin = D5;
+const int SCREEN_MODE_INIT = -1;    // SHOW LOGO
 const int SCREEN_MODE_DEFAULT = 0;    // SHOW ALL
 const int SCREEN_MODE_CPU = 1;        // SHOW cpu only
 const int SCREEN_MODE_MEM = 2;        // show mem only
@@ -14,7 +15,7 @@ const int READING_TIMEOUT = 100;
 
 // Duration of logo showing
 // time = READING_TIMEOUT * VA_DISPLAY_TIMES_SHOW
-const int VA_DISPLAY_TIMES_SHOW = 10;
+const int VA_DISPLAY_TIMES_SHOW = 2;
 
 static struct pt serialReedHandlePt, buttonHanldePt, lcdHanldePt;
 
@@ -28,7 +29,7 @@ int cpuTempArraySize = 0,
     buttonState,
     lastButtonState = LOW,
 
-    currentScreen = SCREEN_MODE_DEFAULT,
+    currentScreen = SCREEN_MODE_INIT,
     currentVaScreen = 0,
     currentVaDispolayScreenShowed = 0;
 
@@ -143,7 +144,7 @@ void parseReadings(String s)
         String vaParams = getReading(s, "va" + i);
 
         card.id = i;
-        card.name = getReading(vaParams, "card");
+        card.name = getReading(vaParams, "dev_name");
         card.engClock = getReading(vaParams, "eng_clock");
         card.memClock = getReading(vaParams, "mem_clock");
         card.currTemp = getReading(vaParams, "currtemp");
@@ -165,6 +166,10 @@ void printScreenDefault()
   if (currCPULoadPercent.length() == 5) {
     lcd.setCursor(9, 0);
     lcd.print("  ");
+  }
+  if (currCPULoadPercent.length() == 4) {
+    lcd.setCursor(8, 0);
+    lcd.print("   ");
   }
 
   lcd.setCursor(11, 0);
@@ -282,6 +287,8 @@ void parseButton()
       currentVaScreen++;
     }
     return;
+  }else{
+    lcd.clear(); // clean up lcd on mode change
   }
 
   // more than last one screen
@@ -332,8 +339,11 @@ static int readSerial(struct pt *pt, int interval)
       parseReadings(s);
       Serial.println(s);
       delay(READING_TIMEOUT);
+      
+      if(currentScreen == SCREEN_MODE_INIT){
+        currentScreen++;
+      }
     }
-
   }
   PT_END(pt);
 }
@@ -373,6 +383,10 @@ static int showScreen(struct pt *pt, int interval)
       case SCREEN_MODE_VA:
         printGpuScreen(&videocards[currentVaScreen]);
         break;
+
+      case SCREEN_MODE_INIT:
+      default:
+        showStartupMessage();
     }
 
   }
@@ -383,5 +397,5 @@ void loop()
 {
   readSerial(&serialReedHandlePt, 10);
   readButton(&buttonHanldePt, 10);
-  showScreen(&lcdHanldePt, 1000);
+  showScreen(&lcdHanldePt, 500);
 }
