@@ -13,6 +13,8 @@ const int SCREEN_MODE_VA_DISPLAY = 3; // show video adapter name
 const int SCREEN_MODE_VA = 4;         // show  video adapter stats
 const int READING_TIMEOUT = 100;
 
+const int MAX_CPU_COUNT = 20;
+
 // Duration of logo showing
 // time = READING_TIMEOUT * VA_DISPLAY_TIMES_SHOW
 const int VA_DISPLAY_TIMES_SHOW = 2;
@@ -22,10 +24,11 @@ static struct pt serialReedHandlePt, buttonHanldePt, lcdHanldePt;
 
 bool isPrevReadingReceiveData = false;
 
-int cpuTempArraySize = 0,
-    cpuCount = 0,
+long cpuCount = 0,
     cpuReal = 0,
-    vaCount = 0,
+    vaCount = 0;
+
+int cpuTempArraySize = 0,    
     primVaCard = -1,
 
     buttonState,
@@ -40,7 +43,7 @@ unsigned long lastDebounceTime = 0,
               debounceDelay = 50,
               notReadingSerialCount = 0;
 
-String cpuTempArray[20],
+String cpuTempArray[MAX_CPU_COUNT],
     currCPULoadPercent = "",
     currMemTotal = "",
     currMemUsed = "",
@@ -63,7 +66,7 @@ struct VideoCard
   String fanRpm;
 };
 
-VideoCard videocards[10];
+VideoCard videocards[2];
 
 LiquidCrystal_I2C lcd(0x3F, 20, 4);
 
@@ -105,8 +108,9 @@ void parseReadings(String s)
     String cpuInfo = s.substring(strlen("cpu_stat"), cpuEndIndx);
 
     int cpuTempArraySize = 0;
-    int occurencesIndexes[20];
-    for (int x = 0; x < cpuInfo.length(); x++) {
+    int occurencesIndexes[MAX_CPU_COUNT];
+    int cpuInfoLength = cpuInfo.length();
+    for (int x = 0; x < cpuInfoLength; x++) {
       if (cpuInfo[x] == ',') {
         occurencesIndexes[cpuTempArraySize] = x;
         cpuTempArraySize++;
@@ -161,7 +165,7 @@ void parseReadings(String s)
         videocards[i] = card;
       }
 
-      int primGpu = getReading(s, "prim_gpu").toInt();
+      long primGpu = getReading(s, "prim_gpu").toInt();
       if(primGpu != -1){
         primVaCard = primGpu;
       }
@@ -309,18 +313,17 @@ void printGpuScreen(VideoCard *card)
 }
 
 void parseButton()
-{
-  Serial.println("Clicked");
+{  
   ++currentScreen;
 
   // show different subscreens for VA adapters
   if ((currentScreen == SCREEN_MODE_VA_DISPLAY && vaCount > 0) 
     || (currentScreen == SCREEN_MODE_VA && vaCount > 0)){
-    if (currentVaScreen == vaCount - 1) {
-      currentVaScreen = 0;
-    } else {
-      currentVaScreen++;
-    }
+      if (currentVaScreen == vaCount - 1) {
+        currentVaScreen = 0;
+      } else {
+        currentVaScreen++;
+      }
     return;
   }else{
     lcd.clear(); // clean up lcd on mode change
@@ -332,7 +335,7 @@ void parseButton()
   }
 }
 
-static int readButton(struct pt *pt, int interval)
+static int readButton(struct pt *pt, unsigned int interval)
 {
   static unsigned long timestamp = 0;
   PT_BEGIN(pt);
@@ -361,7 +364,7 @@ static int readButton(struct pt *pt, int interval)
   PT_END(pt);
 }
 
-static int readSerial(struct pt *pt, int interval)
+static int readSerial(struct pt *pt, unsigned int interval)
 {
   static unsigned long timestamp = 0;
   PT_BEGIN(pt);
@@ -390,7 +393,7 @@ static int readSerial(struct pt *pt, int interval)
   PT_END(pt);
 }
 
-static int showScreen(struct pt *pt, int interval)
+static int showScreen(struct pt *pt, unsigned int interval)
 {
   static unsigned long timestamp = 0;
   PT_BEGIN(pt);
