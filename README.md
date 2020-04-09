@@ -7,9 +7,9 @@ Description
 -----------
 
 This until gather PC's information (cpu, mem, video cards loading, fan stats) via serial port
-and show it on LCD 16x4 screen
+and show it on LCD 4x20 screen
 
-[Python project](https://github.com/flotzilla/WminiLoad) for gathering info from pc
+[Python project](https://github.com/flotzilla/ArdLoader) for gathering info from pc
 
 Requirements
 ------------
