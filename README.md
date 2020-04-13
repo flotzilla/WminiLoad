@@ -11,6 +11,10 @@ and show it on LCD 4x20 screen
 
 [Python project](https://github.com/flotzilla/ArdLoader) for gathering info from pc
 
+Overview
+---------
+![stats_image](https://user-images.githubusercontent.com/3332506/78845554-89041400-7a11-11ea-8ca0-7d75aecd4009.jpg)
+
 Requirements
 ------------
 * arduino / esp8266 / wemos board
